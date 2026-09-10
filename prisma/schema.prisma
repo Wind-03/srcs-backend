@@ -1,0 +1,206 @@
+// SRCS — Student Result Compilation and Scaling System
+// Prisma schema (data model per PRD §5). Target: Supabase PostgreSQL.
+//
+// After editing, run:  npx prisma generate  &&  npx prisma migrate dev
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL") // Supabase pooled vs direct connection
+}
+
+enum UserRole {
+  LECTURER
+  ADMIN
+}
+
+enum AssessmentType {
+  TEST
+  PRACTICAL
+  ASSIGNMENT
+  EXAMINATION
+}
+
+enum AuditAction {
+  UPLOAD
+  SCORE_EDIT
+  SCALING_APPLY
+  COMPILE
+  EXPORT
+  LOGIN
+  GRADE_SCALE_UPDATE
+}
+
+model User {
+  id           String   @id @default(uuid())
+  email        String   @unique
+  fullName     String
+  passwordHash String
+  role         UserRole @default(LECTURER)
+  isApproved   Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  courses        Course[]
+  uploadedScores Score[]        @relation("UploadedBy")
+  scalingActions ScalingAction[]
+  auditLogs      AuditLog[]
+  sessions       Session[]
+
+  @@index([role])
+}
+
+model Session {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Department {
+  id        String   @id @default(uuid())
+  name      String
+  code      String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  students Student[]
+  courses  Course[]
+}
+
+model Student {
+  id                 String   @id @default(uuid())
+  fullName           String
+  registrationNumber String   @unique
+  utmeNumber         String?  @unique
+  departmentId       String
+  department         Department @relation(fields: [departmentId], references: [id])
+  level              Int?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  scores Score[]
+
+  @@index([departmentId])
+  @@index([registrationNumber])
+  @@index([utmeNumber])
+}
+
+model Course {
+  id             String   @id @default(uuid())
+  code           String   @unique
+  title          String
+  departmentId   String
+  department     Department @relation(fields: [departmentId], references: [id])
+  lecturerId     String?
+  lecturer       User?    @relation(fields: [lecturerId], references: [id])
+  maxTest        Float    @default(20)
+  maxPractical   Float    @default(20)
+  maxAssignment  Float    @default(0)
+  maxExamination Float    @default(60)
+  gradingScaleId String?
+  gradingScale   GradingScale? @relation(fields: [gradingScaleId], references: [id])
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  scores         Score[]
+  uploadBatches  UploadBatch[]
+  scalingActions ScalingAction[]
+
+  @@index([lecturerId])
+  @@index([departmentId])
+}
+
+model UploadBatch {
+  id             String         @id @default(uuid())
+  courseId       String
+  course         Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  assessmentType AssessmentType
+  fileName       String
+  rowCount       Int
+  importedCount  Int
+  uploadedById   String
+  createdAt      DateTime       @default(now())
+
+  scores Score[]
+
+  @@index([courseId])
+}
+
+model Score {
+  id             String         @id @default(uuid())
+  courseId       String
+  course         Course         @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  studentId      String
+  student        Student        @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  assessmentType AssessmentType
+  rawScore       Float
+  uploadedById   String
+  uploadedBy     User           @relation("UploadedBy", fields: [uploadedById], references: [id])
+  uploadBatchId  String
+  uploadBatch    UploadBatch    @relation(fields: [uploadBatchId], references: [id], onDelete: Cascade)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  // One score per student per component per course.
+  @@unique([courseId, studentId, assessmentType])
+  @@index([courseId])
+  @@index([studentId])
+}
+
+model GradingScale {
+  id        String   @id @default(uuid())
+  name      String
+  isDefault Boolean  @default(false)
+  // Bands stored as JSON: [{ grade, minScore, maxScore, isPass }]
+  bands     Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  courses Course[]
+}
+
+model ScalingAction {
+  id                String   @id @default(uuid())
+  courseId          String
+  course            Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  target            String
+  method            String
+  parameters        Json
+  approvalReference String
+  appliedById       String
+  appliedBy         User     @relation(fields: [appliedById], references: [id])
+  createdAt         DateTime @default(now())
+
+  @@index([courseId])
+}
+
+// Immutable audit trail (PRD §4.9). No update/delete is ever performed on this
+// table by application code — enforced at the service layer.
+model AuditLog {
+  id        String      @id @default(uuid())
+  action    AuditAction
+  actorId   String
+  actor     User        @relation(fields: [actorId], references: [id])
+  courseId  String?
+  studentId String?
+  entity    String
+  entityId  String?
+  oldValue  Json?
+  newValue  Json?
+  reason    String?
+  metadata  Json?
+  createdAt DateTime    @default(now())
+
+  @@index([courseId])
+  @@index([action])
+  @@index([createdAt])
+}
