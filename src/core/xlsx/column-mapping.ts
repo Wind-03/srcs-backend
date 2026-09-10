@@ -1,11 +1,4 @@
-/**
- * Column mapping (PRD §4.3).
- *
- * Uploaded workbooks come from many hands and never use identical headers.
- * This module maps a sheet's real headers onto the canonical fields SRCS needs,
- * using a normalised-alias lookup so "Reg No", "MATRIC NUMBER" and
- * "registration_number" all resolve to `registrationNumber`.
- */
+
 
 export type CanonicalField =
   | 'fullName'
@@ -14,7 +7,6 @@ export type CanonicalField =
   | 'department'
   | 'score';
 
-/** Known header aliases per canonical field (compared after normalisation). */
 const FIELD_ALIASES: Record<CanonicalField, string[]> = {
   fullName: ['fullname', 'name', 'studentname', 'fullnames', 'student'],
   registrationNumber: [
@@ -62,8 +54,6 @@ export function detectColumns(
 
   for (const field of Object.keys(FIELD_ALIASES) as CanonicalField[]) {
     const aliases = FIELD_ALIASES[field];
-    // Prefer an exact alias match; the score field additionally accepts the
-    // assessment-type word (e.g. a "Test" column) resolved by the caller.
     const found = normalisedHeaders.find((h) => aliases.includes(h.normal));
     if (found) mapping[field] = found.original;
   }

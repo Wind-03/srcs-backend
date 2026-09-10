@@ -10,11 +10,6 @@ import { jwtPayloadSchema } from '../../schemas';
 import { IS_PUBLIC_KEY } from './roles.decorator';
 import type { AuthenticatedRequest } from './current-user.decorator';
 
-/**
- * Verifies the `Authorization: Bearer <token>` header, validates the decoded
- * payload with Zod, and attaches the typed user to the request. Routes marked
- * @Public() bypass the check.
- */
 @Injectable()
 export class JwtAuthGuard implements CanActivate {
   constructor(

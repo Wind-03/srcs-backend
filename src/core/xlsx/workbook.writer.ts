@@ -1,11 +1,7 @@
 import * as XLSX from 'xlsx';
 import type { CompiledResult, ResultStatistics } from '../../schemas';
 
-/**
- * Build a formatted result workbook (PRD §4.8). Produces two sheets: the
- * compiled result table and a summary-statistics sheet. Returned as a Buffer
- * the HTTP layer can stream as an .xlsx download.
- */
+
 export function buildResultWorkbook(result: CompiledResult): Buffer {
   const workbook = XLSX.utils.book_new();
 
